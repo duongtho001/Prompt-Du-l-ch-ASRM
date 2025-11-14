@@ -5,6 +5,9 @@ export const VIDEO_STYLES = [
   { key: 'fast_montage', en: 'Fast-Paced Montage', vi: 'Dựng phim nhanh' },
   { key: 'slow_scenic', en: 'Slow & Scenic', vi: 'Chậm rãi & Cảnh đẹp' },
   { key: 'asmr', en: 'ASMR', vi: 'ASMR' },
+  { key: 'market_street_food', en: 'Market & Street Food', vi: 'Chợ & Ẩm thực đường phố' },
+  { key: 'agricultural_production', en: 'Agricultural Production', vi: 'Sản xuất nông nghiệp' },
+  { key: 'baking_sweets', en: 'Baking & Sweets', vi: 'Làm bánh & Đồ ngọt' },
 ];
 
 export const VIDEO_FORMATS = [
