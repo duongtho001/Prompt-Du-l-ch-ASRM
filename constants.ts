@@ -10,6 +10,7 @@ export const VIDEO_STYLES = [
   { key: 'asmr', en: 'ASMR', vi: 'ASMR' },
   { key: 'market_street_food', en: 'Market & Street Food', vi: 'Chợ & Ẩm thực đường phố' },
   { key: 'agricultural_production', en: 'Agricultural Production', vi: 'Sản xuất nông nghiệp' },
+  { key: 'industrial_production', en: 'Industrial Production', vi: 'Sản xuất công nghiệp' },
   { key: 'baking_sweets', en: 'Baking & Sweets', vi: 'Làm bánh & Đồ ngọt' },
   { key: 'survival', en: 'Survival', vi: 'Sinh tồn' },
 ];
