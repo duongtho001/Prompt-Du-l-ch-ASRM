@@ -24,6 +24,7 @@ interface InputPanelProps {
   isIdeaLoading: boolean;
   t: TranslationKeys;
   language: Language;
+  hasApiKeys: boolean;
 }
 
 
@@ -41,6 +42,7 @@ const InputPanel: React.FC<InputPanelProps> = ({
   isIdeaLoading,
   t,
   language,
+  hasApiKeys,
 }) => {
   const [minutesDisplay, setMinutesDisplay] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,7 +114,7 @@ const InputPanel: React.FC<InputPanelProps> = ({
   const displayMinutes = Math.floor(videoConfig.duration / 60);
   const displaySeconds = videoConfig.duration % 60;
 
-  const canGenerateScript = !isLoading && !isIdeaLoading && storyIdea.trim() && videoConfig.duration > 0;
+  const canGenerateScript = !isLoading && !isIdeaLoading && storyIdea.trim() && videoConfig.duration > 0 && hasApiKeys;
   const canGenerateStoryboard = canGenerateScript && generatedScript.trim() !== '';
   
   const isGeneratingScript = isLoading && !generatedScript;
@@ -175,8 +177,9 @@ const InputPanel: React.FC<InputPanelProps> = ({
           </label>
            <button
             onClick={onGenerateStoryIdea}
-            disabled={isLoading || isIdeaLoading}
+            disabled={isLoading || isIdeaLoading || !hasApiKeys}
             className="flex items-center gap-x-1.5 text-sm font-semibold text-[#5BEAFF] hover:text-cyan-200 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+            title={!hasApiKeys ? t.apiKeyMissingError : ''}
           >
             <LightBulbIcon className="w-4 h-4" />
             {isIdeaLoading ? t.suggestingIdeaButton : t.suggestIdeaButton}
@@ -256,6 +259,7 @@ const InputPanel: React.FC<InputPanelProps> = ({
       <button
         onClick={onPrimaryAction}
         disabled={isLoading || (generatedScript ? !canGenerateStoryboard : !canGenerateScript)}
+        title={!hasApiKeys ? t.apiKeyMissingError : ''}
         className="w-full flex items-center justify-center gap-x-2 bg-[#5BEAFF] text-[#0D0D0F] font-bold py-3 px-6 rounded-lg hover:bg-opacity-90 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed transform hover:scale-105"
       >
         <SparklesIcon className="w-6 h-6" />

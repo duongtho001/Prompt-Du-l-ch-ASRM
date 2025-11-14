@@ -17,6 +17,17 @@ const en = {
     newProjectButton: "New Project",
     guideButtonTooltip: "Show User Guide",
     languageLabel: "Language",
+    apiKeysButton: "API Keys",
+    apiKeyButtonTooltip: "API Key Settings",
+
+    // API Key Modal
+    apiKeyModalTitle: "Manage API Keys",
+    apiKeyModalDescription: "Enter your Google Gemini API keys below, one per line.",
+    apiKeyModalPlaceholder: "AIzaSy...\nAIzaSy...",
+    apiKeyModalNotice: "The app will automatically rotate to the next key if the current one reaches its quota.",
+    apiKeyModalSaveButton: "Save Keys",
+    apiKeyMissingError: "Please set your API Key(s) before generating.",
+    allApiKeysFailedError: "All provided API keys failed due to quota limits or being invalid. Please check your keys.",
 
     // InputPanel.tsx
     referenceLocationsLabel: "Reference Locations",
@@ -117,16 +128,18 @@ const en = {
     // GuideModal.tsx
     guideModalTitle: "How to Use Travel Video Storyboarder",
     guideSteps: [
-        { title: "Step 1: Set Video Style & Duration", description: "Choose a visual style for travel and the desired length of your video in minutes." },
-        { title: "Step 2: Define the Travel Idea", description: "Write your travel concept or click 'Suggest an Idea' to have the AI generate one for you based on your chosen style." },
-        { title: "Step 3: Add Reference Images", description: "Upload one or more high-quality photos of the location or the style you want to emulate. These will guide the AI's image generation." },
-        { title: "Step 4: Generate Shot List", description: "Click 'Generate Shot List'. The AI will create a sequence of shots (like a script) based on your travel idea and duration." },
-        { title: "Step 5: Generate Storyboard", description: "With the shot list in place, click 'Generate Storyboard' to create a detailed, scene-by-scene breakdown with AI image prompts." },
-        { title: "Step 6: Generate Scene Images", description: "In the timeline, select a reference image and generate visuals for each scene, either one by one or all at once using the batch tool." },
-        { title: "Step 7: Review and Export", description: "Review your storyboard. You can edit the JSON prompts for any scene to fine-tune the visuals, then download all prompts or images." },
+        { title: "Step 1: Set API Keys", description: "Click the 'API Keys' button in the header to enter your Google Gemini API key(s). The app will not work without them." },
+        { title: "Step 2: Set Video Style & Duration", description: "Choose a visual style for travel and the desired length of your video in minutes." },
+        { title: "Step 3: Define the Travel Idea", description: "Write your travel concept or click 'Suggest an Idea' to have the AI generate one for you based on your chosen style." },
+        { title: "Step 4: Add Reference Images", description: "Upload one or more high-quality photos of the location or the style you want to emulate. These will guide the AI's image generation." },
+        { title: "Step 5: Generate Shot List", description: "Click 'Generate Shot List'. The AI will create a sequence of shots (like a script) based on your travel idea and duration." },
+        { title: "Step 6: Generate Storyboard", description: "With the shot list in place, click 'Generate Storyboard' to create a detailed, scene-by-scene breakdown with AI image prompts." },
+        { title: "Step 7: Generate Scene Images", description: "In the timeline, select a reference image and generate visuals for each scene, either one by one or all at once using the batch tool." },
+        { title: "Step 8: Review and Export", description: "Review your storyboard. You can edit the JSON prompts for any scene to fine-tune the visuals, then download all prompts or images." },
     ],
     guideProTipsTitle: "Pro-Tips",
     guideProTips: [
+        { title: "Multiple API Keys", description: "If you have multiple API keys, enter each one on a new line. The app will automatically switch to the next key if one runs out of quota." },
         { title: "Quality References", description: "The better your reference images, the more consistent and beautiful your generated scenes will be. Use clear, well-lit photos." },
         { title: "Iterate and Refine", description: "Don't be afraid to edit the shot list or prompts. The JSON prompts are fully editable to change camera angles, lighting, or motion." },
         { title: "Batch Generation", description: "To quickly visualize your entire storyboard, upload a primary reference image and use the 'Generate All Missing Images' button." },
@@ -268,6 +281,17 @@ const vi = {
     newProjectButton: "Dự án mới",
     guideButtonTooltip: "Hiển thị hướng dẫn sử dụng",
     languageLabel: "Ngôn ngữ",
+    apiKeysButton: "Khóa API",
+    apiKeyButtonTooltip: "Cài đặt khóa API",
+
+    // API Key Modal
+    apiKeyModalTitle: "Quản lý khóa API",
+    apiKeyModalDescription: "Nhập các khóa API Google Gemini của bạn bên dưới, mỗi khóa một dòng.",
+    apiKeyModalPlaceholder: "AIzaSy...\nAIzaSy...",
+    apiKeyModalNotice: "Ứng dụng sẽ tự động chuyển sang khóa tiếp theo nếu khóa hiện tại hết hạn ngạch.",
+    apiKeyModalSaveButton: "Lưu khóa",
+    apiKeyMissingError: "Vui lòng thiết lập (các) khóa API của bạn trước khi tạo.",
+    allApiKeysFailedError: "Tất cả các khóa API được cung cấp đều không thành công do giới hạn hạn ngạch hoặc không hợp lệ. Vui lòng kiểm tra lại khóa của bạn.",
 
     // InputPanel.tsx
     referenceLocationsLabel: "Địa điểm tham chiếu",
@@ -367,16 +391,18 @@ const vi = {
     // GuideModal.tsx
     guideModalTitle: "Hướng dẫn sử dụng Storyboarder Video Du lịch",
     guideSteps: [
-        { title: "Bước 1: Cài đặt Phong cách & Thời lượng", description: "Chọn một phong cách hình ảnh du lịch và thời lượng video mong muốn." },
-        { title: "Bước 2: Xác định Ý tưởng Du lịch", description: "Viết ý tưởng du lịch của bạn hoặc nhấp 'Gợi ý ý tưởng' để AI tạo giúp bạn." },
-        { title: "Bước 3: Thêm Ảnh tham chiếu", description: "Tải lên một hoặc nhiều ảnh chất lượng cao về địa điểm hoặc phong cách bạn muốn. Điều này sẽ hướng dẫn AI tạo hình ảnh." },
-        { title: "Bước 4: Tạo Danh sách cảnh quay", description: "Nhấp vào 'Tạo danh sách cảnh quay'. AI sẽ tạo một chuỗi các cảnh quay dựa trên ý tưởng và thời lượng của bạn." },
-        { title: "Bước 5: Tạo Bảng phân cảnh", description: "Khi đã có danh sách cảnh quay, hãy nhấp vào 'Tạo Bảng phân cảnh' để tạo ra các prompt chi tiết cho từng cảnh." },
-        { title: "Bước 6: Tạo Hình ảnh Phân cảnh", description: "Trong dòng thời gian, chọn một ảnh tham chiếu và tạo hình ảnh cho từng cảnh, có thể tạo từng cái một hoặc hàng loạt." },
-        { title: "Bước 7: Xem lại và Xuất", description: "Xem lại bảng phân cảnh của bạn. Bạn có thể chỉnh sửa prompt JSON để tinh chỉnh hình ảnh, sau đó tải xuống tất cả prompt hoặc hình ảnh." },
+        { title: "Bước 1: Cài đặt Khóa API", description: "Nhấp vào nút 'Khóa API' ở thanh tiêu đề để nhập (các) khóa API Google Gemini của bạn. Ứng dụng sẽ không hoạt động nếu không có khóa." },
+        { title: "Bước 2: Cài đặt Phong cách & Thời lượng", description: "Chọn một phong cách hình ảnh du lịch và thời lượng video mong muốn." },
+        { title: "Bước 3: Xác định Ý tưởng Du lịch", description: "Viết ý tưởng du lịch của bạn hoặc nhấp 'Gợi ý ý tưởng' để AI tạo giúp bạn." },
+        { title: "Bước 4: Thêm Ảnh tham chiếu", description: "Tải lên một hoặc nhiều ảnh chất lượng cao về địa điểm hoặc phong cách bạn muốn. Điều này sẽ hướng dẫn AI tạo hình ảnh." },
+        { title: "Bước 5: Tạo Danh sách cảnh quay", description: "Nhấp vào 'Tạo danh sách cảnh quay'. AI sẽ tạo một chuỗi các cảnh quay dựa trên ý tưởng và thời lượng của bạn." },
+        { title: "Bước 6: Tạo Bảng phân cảnh", description: "Khi đã có danh sách cảnh quay, hãy nhấp vào 'Tạo Bảng phân cảnh' để tạo ra các prompt chi tiết cho từng cảnh." },
+        { title: "Bước 7: Tạo Hình ảnh Phân cảnh", description: "Trong dòng thời gian, chọn một ảnh tham chiếu và tạo hình ảnh cho từng cảnh, có thể tạo từng cái một hoặc hàng loạt." },
+        { title: "Bước 8: Xem lại và Xuất", description: "Xem lại bảng phân cảnh của bạn. Bạn có thể chỉnh sửa prompt JSON để tinh chỉnh hình ảnh, sau đó tải xuống tất cả prompt hoặc hình ảnh." },
     ],
     guideProTipsTitle: "Mẹo chuyên nghiệp",
     guideProTips: [
+        { title: "Nhiều Khóa API", description: "Nếu bạn có nhiều khóa API, hãy nhập mỗi khóa trên một dòng mới. Ứng dụng sẽ tự động chuyển sang khóa tiếp theo nếu một khóa hết hạn ngạch." },
         { title: "Tham chiếu chất lượng", description: "Ảnh tham chiếu của bạn càng tốt, các cảnh được tạo ra sẽ càng nhất quán và đẹp mắt. Hãy sử dụng ảnh rõ nét, đủ sáng." },
         { title: "Lặp lại và Tinh chỉnh", description: "Đừng ngại chỉnh sửa danh sách cảnh quay hoặc prompt. Prompt JSON hoàn toàn có thể chỉnh sửa để thay đổi góc máy, ánh sáng hoặc chuyển động." },
         { title: "Tạo hàng loạt", description: "Để nhanh chóng hình dung toàn bộ kịch bản phân cảnh, hãy tải lên một ảnh tham chiếu chính và sử dụng nút 'Tạo tất cả hình ảnh còn thiếu'." },

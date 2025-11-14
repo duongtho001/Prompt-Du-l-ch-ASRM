@@ -2,20 +2,33 @@ import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/ge
 import type { VideoConfig, Scene, ScenePrompt } from '../types';
 import { Language, translations } from "../translations";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let apiKeys: string[] = [];
+let currentKeyIndex = 0;
 
-// --- Start of new retry logic ---
+export function setApiKeys(keys: string[]) {
+  apiKeys = keys;
+  currentKeyIndex = 0;
+}
+
+function getClient(): GoogleGenAI {
+  if (apiKeys.length === 0) {
+    throw new Error(translations.en.apiKeyMissingError);
+  }
+  const key = apiKeys[currentKeyIndex];
+  return new GoogleGenAI({ apiKey: key });
+}
+
+function rotateKey(): boolean {
+  if (apiKeys.length > 1) {
+    currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+    console.log(`Rotated to API Key index ${currentKeyIndex}`);
+    return true;
+  }
+  return false;
+}
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * A retry wrapper with exponential backoff for API calls.
- * @param fn The async function to execute.
- * @param retries The maximum number of retries.
- * @param initialDelay The initial delay in milliseconds.
- * @param context A string describing the function where the error occurred for logging.
- * @returns The result of the async function.
- */
 async function withRetry<T>(
   fn: () => Promise<T>,
   retries = 3,
@@ -31,54 +44,68 @@ async function withRetry<T>(
       lastError = error;
       const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
 
-      // Check for retryable error conditions like 503, overloaded, or unavailable
+      // Check for retryable server error conditions
       if (errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('unavailable')) {
         const delay = initialDelay * (2 ** i);
-        console.warn(`Attempt ${i + 1}/${retries} failed in ${context} with a retryable error. Retrying in ${delay}ms...`);
-        await sleep(delay + Math.random() * 500); // Add jitter to avoid thundering herd
+        console.warn(`Attempt ${i + 1}/${retries} failed in ${context} with a server error. Retrying in ${delay}ms...`);
+        await sleep(delay + Math.random() * 500);
       } else {
-        // Not a retryable error, throw immediately to be caught by the outer handler
+        // Not a server error, throw to be handled by key rotation or final error handler
         throw error;
       }
     }
   }
 
-  // If all retries fail, throw the last captured error
-  console.error(`All ${retries} retries failed in ${context}.`);
+  console.error(`All server retries failed in ${context}.`);
   throw lastError;
 }
 
-// --- End of new retry logic ---
+async function withKeyRotation<T>(
+    apiCall: () => Promise<T>,
+    context: string
+): Promise<T> {
+    if (apiKeys.length === 0) {
+        throw new Error(translations.en.apiKeyMissingError);
+    }
+
+    const initialKeyIndex = currentKeyIndex;
+    let attempts = 0;
+
+    while(attempts < apiKeys.length) {
+        try {
+            return await apiCall();
+        } catch (error) {
+            const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
+            const isQuotaError = errorMessage.includes('quota') || errorMessage.includes('api key not valid');
+
+            if (isQuotaError) {
+                attempts++;
+                const rotated = rotateKey();
+                
+                if (!rotated || currentKeyIndex === initialKeyIndex) {
+                    throw new Error(translations.en.allApiKeysFailedError);
+                }
+                console.warn(`Key failed in ${context}. Retrying with next key (index: ${currentKeyIndex}).`);
+            } else {
+                throw error; // Not a quota error, rethrow it for the outer handler
+            }
+        }
+    }
+    throw new Error(translations.en.allApiKeysFailedError);
+}
 
 
-/**
- * Parses errors from the Gemini API and returns a more user-friendly message.
- * @param error The catched error.
- * @param context A string describing the function where the error occurred.
- * @returns A user-friendly error message string.
- */
 function getErrorMessage(error: unknown, context: string): string {
     console.error(`Error in ${context}:`, error);
     if (error instanceof Error) {
-        const message = error.message.toLowerCase();
-        // Check for specific error messages from the Gemini SDK
-        if (message.includes('api key')) {
-            return `API Key Error in ${context}: The API key is not valid or has been disabled. Please ensure it is correctly configured in your environment.`;
+        const message = error.message;
+        if (message === translations.en.apiKeyMissingError || message === translations.en.allApiKeysFailedError) {
+            return message;
         }
-        if (message.includes('quota')) {
-            return `Quota Error in ${context}: You have exceeded your API usage quota. Please check your Google AI project.`;
-        }
-        if (message.includes('permission denied')) {
-             return `Permission Error in ${context}: The API key lacks the necessary permissions for this operation.`;
-        }
-         if (message.includes('json')) {
-             return `Response Error in ${context}: The model returned an invalid response. It might be helpful to try again.`;
-        }
-        if (message.includes('overloaded') || message.includes('503') || message.includes('unavailable')) {
+        if (message.toLowerCase().includes('overloaded') || message.toLowerCase().includes('503') || message.toLowerCase().includes('unavailable')) {
             return `The model is currently busy or unavailable. The request was retried but failed. Please try again in a few moments. (Context: ${context})`;
         }
-        // Fallback to a cleaner version of the original message
-        return `Error in ${context}: ${error.message}`;
+        return `Error in ${context}: ${message}`;
     }
     return `An unknown error occurred in ${context}.`;
 }
@@ -141,6 +168,7 @@ export const generateStoryIdea = async (
   const systemInstruction = translations[language].systemInstruction_generateStoryIdea(style);
 
   const apiCall = async () => {
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model,
       contents: "Please generate a travel video concept.",
@@ -153,7 +181,8 @@ export const generateStoryIdea = async (
   };
 
   try {
-    return await withRetry(apiCall, 3, 1000, 'generateStoryIdea');
+     const performApiCall = () => withRetry(apiCall, 3, 1000, 'generateStoryIdea (server retry)');
+     return await withKeyRotation(performApiCall, 'generateStoryIdea');
   } catch (error) {
     throw new Error(getErrorMessage(error, 'generateStoryIdea'));
   }
@@ -176,6 +205,7 @@ export const generateScript = async (
   `;
 
   const apiCall = async () => {
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model,
       contents: userPrompt,
@@ -190,7 +220,8 @@ export const generateScript = async (
   };
 
   try {
-    return await withRetry(apiCall, 3, 1000, 'generateScript');
+    const performApiCall = () => withRetry(apiCall, 3, 1000, 'generateScript (server retry)');
+    return await withKeyRotation(performApiCall, 'generateScript');
   } catch (error) {
     throw new Error(getErrorMessage(error, 'generateScript'));
   }
@@ -231,6 +262,7 @@ export const generateScenePrompts = async (
     `;
 
   const apiCall = async () => {
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model,
       contents: userPrompt,
@@ -271,7 +303,8 @@ export const generateScenePrompts = async (
   };
 
   try {
-    return await withRetry(apiCall, 3, 1500, 'generateScenePrompts');
+    const performApiCall = () => withRetry(apiCall, 3, 1500, 'generateScenePrompts (server retry)');
+    return await withKeyRotation(performApiCall, 'generateScenePrompts');
   } catch (error) {
     throw new Error(getErrorMessage(error, 'generateScenePrompts'));
   }
@@ -298,6 +331,7 @@ export const generateScenePrompts = async (
       };
   
       const apiCall = async () => {
+          const ai = getClient();
           const response: GenerateContentResponse = await ai.models.generateContent({
               model,
               contents: { parts: [imagePart, textPart] },
@@ -316,7 +350,8 @@ export const generateScenePrompts = async (
       };
       
       try {
-          return await withRetry(apiCall, 3, 1500, 'generateSceneImage');
+          const performApiCall = () => withRetry(apiCall, 3, 1500, 'generateSceneImage (server retry)');
+          return await withKeyRotation(performApiCall, 'generateSceneImage');
       } catch (error) {
         throw new Error(getErrorMessage(error, 'generateSceneImage'));
       }

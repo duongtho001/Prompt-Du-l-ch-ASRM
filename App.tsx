@@ -3,13 +3,17 @@ import Header from './components/Header';
 import InputPanel from './components/InputPanel';
 import SceneTimeline from './components/SceneTimeline';
 import type { Scene, ReferenceImage, VideoConfig, ScenePrompt } from './types';
-import { generateScenePrompts, generateScript, generateStoryIdea, generateSceneImage } from './services/geminiService';
+import { generateScenePrompts, generateScript, generateStoryIdea, generateSceneImage, setApiKeys } from './services/geminiService';
 import { translations, type Language } from './translations';
 import GuideModal from './components/GuideModal';
 import ConfirmationModal from './components/ConfirmationModal';
 import ExclamationTriangleIcon from './components/icons/ExclamationTriangleIcon';
+import CodeBracketIcon from './components/icons/CodeBracketIcon';
+import ApiKeyModal from './components/ApiKeyModal';
 
 declare var JSZip: any;
+
+const API_KEYS_STORAGE_KEY = 'gemini-api-keys';
 
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>('vi');
@@ -39,6 +43,36 @@ const App: React.FC = () => {
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [isGenerationComplete, setIsGenerationComplete] = useState<boolean>(false);
   const [generationStatusMessage, setGenerationStatusMessage] = useState<string>('');
+
+  const [apiKeys, setApiKeysState] = useState<string[]>([]);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const storedKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
+      if (storedKeys) {
+        const parsedKeys = JSON.parse(storedKeys);
+        if (Array.isArray(parsedKeys) && parsedKeys.length > 0) {
+          setApiKeysState(parsedKeys);
+          setApiKeys(parsedKeys);
+        } else {
+            setIsApiKeyModalOpen(true);
+        }
+      } else {
+        setIsApiKeyModalOpen(true);
+      }
+    } catch (e) {
+      console.error("Failed to load API keys from storage", e);
+      setIsApiKeyModalOpen(true);
+    }
+  }, []);
+
+  const handleSaveApiKeys = (keys: string[]) => {
+    setApiKeysState(keys);
+    setApiKeys(keys);
+    localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys));
+    setError(null);
+  };
   
   useEffect(() => {
     const firstLine = storyIdea.split('\n')[0].trim();
@@ -84,7 +118,19 @@ const App: React.FC = () => {
       setIsNewProjectConfirmVisible(false);
   };
 
+  const preflightCheck = (): boolean => {
+    if (apiKeys.length === 0) {
+      setError(t.apiKeyMissingError);
+      setIsApiKeyModalOpen(true);
+      return false;
+    }
+    setError(null);
+    return true;
+  };
+
   const handleGenerateStoryIdea = async () => {
+    if (!preflightCheck()) return;
+
     setIsIdeaLoading(true);
     setError(null);
     try {
@@ -98,7 +144,7 @@ const App: React.FC = () => {
   };
 
   const handleGenerateScript = async () => {
-    if (!storyIdea.trim() || videoConfig.duration <= 0) return;
+    if (!storyIdea.trim() || videoConfig.duration <= 0 || !preflightCheck()) return;
     
     setIsLoading(true);
     setError(null);
@@ -118,7 +164,7 @@ const App: React.FC = () => {
   };
 
   const handleGenerateStoryboard = async () => {
-    if (!generatedScript.trim()) return;
+    if (!generatedScript.trim() || !preflightCheck()) return;
 
     setIsLoading(true);
     setError(null);
@@ -213,6 +259,7 @@ const App: React.FC = () => {
   };
 
   const handleGenerateSceneImage = async (sceneId: number, referenceImageId: string) => {
+    if (!preflightCheck()) return;
     const scene = scenes.find(s => s.scene_id === sceneId);
     const referenceImage = referenceImages.find(c => c.id === referenceImageId);
     if (!scene || !referenceImage || !referenceImage.imageUrl) return;
@@ -231,6 +278,7 @@ const App: React.FC = () => {
   };
 
   const handleGenerateAllSceneImages = async (referenceImageId: string) => {
+    if (!preflightCheck()) return;
     const referenceImage = referenceImages.find(c => c.id === referenceImageId);
     if (!referenceImage || !referenceImage.imageUrl) {
         setError("Selected reference image is not available.");
@@ -250,7 +298,8 @@ const App: React.FC = () => {
             const imageUrl = await generateSceneImage(scene.prompt, referenceImage.imageUrl);
             setScenes(prev => prev.map(s => s.scene_id === scene.scene_id ? { ...s, imageUrl, isGeneratingImage: false } : s));
         } catch (err) {
-            setError(`Failed to generate image for Scene ${scene.scene_id}. Batch process stopped.`);
+            const errorMessage = err instanceof Error ? err.message : `Failed to generate image for Scene ${scene.scene_id}.`;
+            setError(`${errorMessage} Batch process stopped.`);
             setScenes(prev => prev.map(s => s.scene_id === scene.scene_id ? { ...s, isGeneratingImage: false } : s));
             setIsBatchGenerating(false);
             return; // Stop on first error
@@ -319,7 +368,24 @@ const App: React.FC = () => {
 
   return (
     <div className="bg-[#0D0D0F] min-h-screen text-gray-200 font-sans">
+      <div className="bg-black/30 text-center py-2 px-4 text-xs text-gray-400 flex items-center justify-center gap-x-4 border-b border-gray-800">
+        <div className="flex items-center gap-x-2">
+          <CodeBracketIcon className="w-4 h-4 text-cyan-400" />
+          <span>App của Thọ - 0934415387</span>
+        </div>
+        <div className="h-4 border-l border-gray-700"></div>
+        <a href="https://zalo.me/g/sgkzgk550" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">
+          Tham Gia Nhóm zalo tạo app
+        </a>
+      </div>
       <GuideModal isOpen={isGuideVisible} onClose={() => setIsGuideVisible(false)} t={t} />
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onSave={handleSaveApiKeys}
+        currentKeys={apiKeys}
+        t={t}
+      />
       <ConfirmationModal
         isOpen={isNewProjectConfirmVisible}
         onClose={() => setIsNewProjectConfirmVisible(false)}
@@ -346,6 +412,7 @@ const App: React.FC = () => {
         t={t} 
         onOpenGuide={() => setIsGuideVisible(true)}
         onNewProject={handleNewProjectRequest}
+        onOpenApiKeys={() => setIsApiKeyModalOpen(true)}
       />
       <main className="container mx-auto p-4 md:p-8">
         {error && !isResumeModalVisible && (
@@ -370,6 +437,7 @@ const App: React.FC = () => {
             isIdeaLoading={isIdeaLoading}
             t={t}
             language={language}
+            hasApiKeys={apiKeys.length > 0}
           />
           <SceneTimeline
             scenes={scenes}

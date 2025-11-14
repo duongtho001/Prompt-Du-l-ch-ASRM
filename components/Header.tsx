@@ -3,6 +3,7 @@ import type { Language, TranslationKeys } from '../translations';
 import SparklesIcon from './icons/SparklesIcon';
 import QuestionMarkCircleIcon from './icons/QuestionMarkCircleIcon';
 import PlusIcon from './icons/PlusIcon';
+import KeyIcon from './icons/KeyIcon';
 
 
 interface HeaderProps {
@@ -10,6 +11,7 @@ interface HeaderProps {
   setLanguage: (lang: Language) => void;
   onOpenGuide: () => void;
   onNewProject: () => void;
+  onOpenApiKeys: () => void;
   t: TranslationKeys;
 }
 
@@ -19,6 +21,7 @@ const Header: React.FC<HeaderProps> = ({
   t,
   onOpenGuide,
   onNewProject,
+  onOpenApiKeys,
 }) => {
   return (
     <header className="bg-[#1E1E22] p-4 shadow-md flex justify-between items-center border-b-2 border-gray-700 sticky top-0 z-10">
@@ -31,6 +34,15 @@ const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-x-4">
+        <button
+          onClick={onOpenApiKeys}
+          title={t.apiKeyButtonTooltip}
+          className="flex items-center gap-x-2 bg-yellow-900/40 text-yellow-300 font-semibold py-2 px-3 rounded-lg hover:bg-yellow-800/60 hover:text-yellow-200 transition-colors border border-yellow-700/80"
+        >
+          <KeyIcon className="w-5 h-5" />
+          {t.apiKeysButton}
+        </button>
+
         <button
           onClick={onNewProject}
           className="flex items-center gap-x-2 bg-[#0D0D0F] text-gray-300 font-semibold py-2 px-3 rounded-lg hover:bg-gray-700 hover:text-white transition-colors border border-gray-600"
