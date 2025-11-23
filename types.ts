@@ -1,29 +1,30 @@
-import { ReactNode } from "react";
-
-export interface ReferenceImage {
+export interface CharacterReference {
   id: string;
   name: string;
-  imageUrl: string;
+  prompt: string;
+  imageUrl: string | null;
+}
+
+export interface CharacterVariation {
+  title: string;
+  description: string;
 }
 
 export interface ScenePrompt {
-  description: string;
-  style: string;
-  camera: string;
+  scene_description: string;
+  character_description: string; // Includes actions and expressions
+  background_description: string;
+  camera_shot: string;
   lighting: string;
-  environment: string;
-  elements: string[];
-  motion: string;
-  dialogue: string; // The dialogue or voiceover text for the scene
-  audio: string;
-  ending: string;
-  text: string;
+  color_palette: string;
+  style: string;
+  composition_notes: string;
+  sound_effects: string;
+  dialogue: string;
   keywords: string[];
+  negative_prompts: string[];
   aspect_ratio: string;
   duration_seconds: number;
-  fps: number;
-  quality: string;
-  negative_prompts: string[];
 }
 
 
@@ -40,16 +41,18 @@ export interface VideoConfig {
   style: string;
   includeDialogue: boolean;
   dialogueLanguage: string;
-  format: 'trailer' | 'short' | 'longform';
+  format: 'action_scene' | 'narrative_short' | 'emotional_moment';
 }
 
 export interface Project {
   id: string;
   name: string;
-  referenceImages: ReferenceImage[];
+  characterReferences: CharacterReference[];
   storyIdea: string;
   generatedScript: string;
   videoConfig: VideoConfig;
   scenes: Scene[];
+  apiProvider: string;
+  selectedModel: string;
   lastModified: number;
 }

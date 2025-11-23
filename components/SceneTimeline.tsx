@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Scene, ReferenceImage, ScenePrompt } from '../types';
+import type { Scene, CharacterReference, ScenePrompt } from '../types';
 import SceneCard from './SceneCard';
 import Loader from './Loader';
 import type { TranslationKeys } from '../translations';
@@ -16,9 +16,9 @@ interface SceneTimelineProps {
   generationStatusMessage: string;
   onDownloadPrompts: () => void;
   onDownloadAllImages: () => void;
-  referenceImages: ReferenceImage[];
-  onGenerateSceneImage: (sceneId: number, referenceImageId: string) => void;
-  onGenerateAllSceneImages: (referenceImageId: string) => void;
+  characterReferences: CharacterReference[];
+  onGenerateSceneImage: (sceneId: number, referenceCharacterId: string) => void;
+  onGenerateAllSceneImages: (referenceCharacterId: string) => void;
   t: TranslationKeys;
 }
 
@@ -29,7 +29,7 @@ const SceneTimeline: React.FC<SceneTimelineProps> = ({
   isBatchGenerating,
   onDownloadPrompts,
   onDownloadAllImages,
-  referenceImages,
+  characterReferences,
   onGenerateSceneImage, 
   onGenerateAllSceneImages,
   t,
@@ -41,17 +41,16 @@ const SceneTimeline: React.FC<SceneTimelineProps> = ({
   const sortedScenes = [...scenes].sort((a, b) => a.scene_id - b.scene_id);
   
   const hasGeneratedImages = scenes.some(s => s.imageUrl);
+  const imageReferences = characterReferences.filter(c => c.imageUrl);
 
   useEffect(() => {
-    // Auto-select the first image if available
-    if (!primaryReferenceId && referenceImages.length > 0) {
-      setPrimaryReferenceId(referenceImages[0].id);
+    if (!primaryReferenceId && imageReferences.length > 0) {
+      setPrimaryReferenceId(imageReferences[0].id);
     }
-    // If the selected image is removed, reset
-    if (primaryReferenceId && !referenceImages.some(c => c.id === primaryReferenceId)) {
-      setPrimaryReferenceId(referenceImages.length > 0 ? referenceImages[0].id : '');
+    if (primaryReferenceId && !imageReferences.some(c => c.id === primaryReferenceId)) {
+      setPrimaryReferenceId(imageReferences.length > 0 ? imageReferences[0].id : '');
     }
-  }, [referenceImages, primaryReferenceId]);
+  }, [imageReferences, primaryReferenceId]);
 
   return (
     <div className="p-6 bg-[#0D0D0F] rounded-lg min-h-full">
@@ -79,11 +78,11 @@ const SceneTimeline: React.FC<SceneTimelineProps> = ({
                         id="primary-character"
                         value={primaryReferenceId}
                         onChange={(e) => setPrimaryReferenceId(e.target.value)}
-                        disabled={isLoading || isBatchGenerating || referenceImages.length === 0}
+                        disabled={isLoading || isBatchGenerating || imageReferences.length === 0}
                         className="w-full bg-[#0D0D0F] text-gray-300 p-2 rounded-md border border-gray-600 focus:ring-1 focus:ring-[#5BEAFF] focus:border-[#5BEAFF] transition text-sm disabled:bg-gray-800 disabled:text-gray-500"
                     >
                         <option value="">{t.selectPrimaryReferencePrompt}</option>
-                        {referenceImages.map(img => <option key={img.id} value={img.id}>{img.name}</option>)}
+                        {imageReferences.map(char => <option key={char.id} value={char.id}>{char.name}</option>)}
                     </select>
                 </div>
                 <button
@@ -121,7 +120,7 @@ const SceneTimeline: React.FC<SceneTimelineProps> = ({
               key={scene.scene_id} 
               scene={scene} 
               onUpdatePrompt={onUpdatePrompt} 
-              referenceImages={referenceImages}
+              characterReferences={characterReferences}
               onGenerateSceneImage={onGenerateSceneImage}
               isLoading={isLoading}
               isBatchGenerating={isBatchGenerating}

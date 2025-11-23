@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Scene, ReferenceImage } from '../types';
+import type { Scene, CharacterReference } from '../types';
 import type { TranslationKeys } from '../translations';
 import LightBulbIcon from './icons/LightBulbIcon';
 import PromptHelper from './PromptHelper';
@@ -8,20 +8,22 @@ import CameraIcon from './icons/CameraIcon';
 interface SceneCardProps {
   scene: Scene;
   onUpdatePrompt: (sceneId: number, newPrompt: Scene['prompt']) => void;
-  referenceImages: ReferenceImage[];
-  onGenerateSceneImage: (sceneId: number, referenceImageId: string) => void;
+  characterReferences: CharacterReference[];
+  onGenerateSceneImage: (sceneId: number, referenceCharacterId: string) => void;
   isLoading: boolean;
   isBatchGenerating: boolean;
   t: TranslationKeys;
 }
 
-const SceneCard: React.FC<SceneCardProps> = ({ scene, onUpdatePrompt, referenceImages, onGenerateSceneImage, isLoading, isBatchGenerating, t }) => {
+const SceneCard: React.FC<SceneCardProps> = ({ scene, onUpdatePrompt, characterReferences, onGenerateSceneImage, isLoading, isBatchGenerating, t }) => {
   const [promptText, setPromptText] = useState(JSON.stringify(scene.prompt, null, 2));
   const [isValidJson, setIsValidJson] = useState(true);
   const [isHelperVisible, setIsHelperVisible] = useState(false);
   const [selectedReferenceId, setSelectedReferenceId] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isFocusedRef = useRef(false);
+
+  const imageReferences = characterReferences.filter(c => c.imageUrl);
 
   useEffect(() => {
     // Only update the textarea from props if it's not currently focused by the user
@@ -33,10 +35,10 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene, onUpdatePrompt, referenceI
   }, [scene.prompt]);
   
   useEffect(() => {
-    if (!selectedReferenceId && referenceImages.length > 0) {
-      setSelectedReferenceId(referenceImages[0].id);
+    if (!selectedReferenceId && imageReferences.length > 0) {
+      setSelectedReferenceId(imageReferences[0].id);
     }
-  }, [referenceImages, selectedReferenceId]);
+  }, [imageReferences, selectedReferenceId]);
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
@@ -152,12 +154,12 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene, onUpdatePrompt, referenceI
                 id={`ref-${scene.scene_id}`}
                 value={selectedReferenceId}
                 onChange={(e) => setSelectedReferenceId(e.target.value)}
-                disabled={referenceImages.length === 0 || scene.isGeneratingImage || isLoading || isBatchGenerating}
+                disabled={imageReferences.length === 0 || scene.isGeneratingImage || isLoading || isBatchGenerating}
                 className="w-full bg-[#0D0D0F] text-gray-300 p-2 rounded-md border border-gray-600 focus:ring-1 focus:ring-[#5BEAFF] focus:border-[#5BEAFF] transition text-sm disabled:bg-gray-800 disabled:text-gray-500"
               >
-                {referenceImages.length === 0 
+                {imageReferences.length === 0 
                   ? <option value="">{t.noReferenceImagesAvailable}</option>
-                  : referenceImages.map(img => <option key={img.id} value={img.id}>{img.name}</option>)
+                  : imageReferences.map(char => <option key={char.id} value={char.id}>{char.name}</option>)
                 }
               </select>
             </div>

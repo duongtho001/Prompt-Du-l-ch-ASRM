@@ -1,33 +1,11 @@
-import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
-import type { VideoConfig, Scene, ScenePrompt } from '../types';
+import { GoogleGenAI, Modality, GenerateContentResponse, Type } from "@google/genai";
+import type { VideoConfig, Scene, ScenePrompt, CharacterVariation } from '../types';
 import { Language, translations } from "../translations";
-
-let apiKeys: string[] = [];
-let currentKeyIndex = 0;
-
-export function setApiKeys(keys: string[]) {
-  apiKeys = keys;
-  currentKeyIndex = 0;
-}
-
-function getClient(): GoogleGenAI {
-  if (apiKeys.length === 0) {
-    throw new Error(translations.en.apiKeyMissingError);
-  }
-  const key = apiKeys[currentKeyIndex];
-  return new GoogleGenAI({ apiKey: key });
-}
-
-function rotateKey(): boolean {
-  if (apiKeys.length > 1) {
-    currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
-    console.log(`Rotated to API Key index ${currentKeyIndex}`);
-    return true;
-  }
-  return false;
-}
+import * as apiKeyManager from './apiKeyManager';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const INTERNAL_MODEL = 'gemini-2.5-flash';
 
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -42,17 +20,29 @@ async function withRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error;
-      const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      const errorMessage = (error instanceof Error ? error.message : String(error));
+      
+      let delay = 0;
+      
+      // Do not retry on quota errors here; key rotation will handle it.
+      const isQuotaError = errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED');
+      const isServerError = errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('unavailable');
 
-      // Check for retryable server error conditions
-      if (errorMessage.includes('503') || errorMessage.includes('overloaded') || errorMessage.includes('unavailable')) {
-        const delay = initialDelay * (2 ** i);
-        console.warn(`Attempt ${i + 1}/${retries} failed in ${context} with a server error. Retrying in ${delay}ms...`);
-        await sleep(delay + Math.random() * 500);
+      if (isQuotaError) {
+          throw error; // Pass quota errors up to the key rotation handler.
+      } else if (isServerError) {
+          delay = initialDelay * (2 ** i);
+          console.warn(`Attempt ${i + 1}/${retries} failed in ${context} with a server error. Retrying in ${delay}ms...`);
       } else {
-        // Not a server error, throw to be handled by key rotation or final error handler
-        throw error;
+          // For other errors like invalid key, fail immediately.
+          throw error;
       }
+
+      if (i === retries - 1) {
+          break;
+      }
+
+      await sleep(delay + Math.random() * 500);
     }
   }
 
@@ -60,257 +50,320 @@ async function withRetry<T>(
   throw lastError;
 }
 
-async function withKeyRotation<T>(
-    apiCall: () => Promise<T>,
-    context: string
+function getErrorMessage(error: unknown, context: string, language: Language): string {
+    const t = translations[language];
+    console.error(`Error in ${context}:`, error);
+    if (error instanceof Error) {
+        const message = error.message.toLowerCase();
+        if (message.includes('all api keys have hit their quota')) {
+            return t.errorAllKeysExhausted;
+        }
+        if (message.includes('quota') || message.includes('resource_exhausted')) {
+            return t.errorQuotaExceeded;
+        }
+        if (message.includes('api key not valid') || message.includes('api key is invalid')) {
+            return t.errorInvalidApiKey(context);
+        }
+        if (message.includes('overloaded') || message.includes('503') || message.includes('unavailable')) {
+            return t.errorServerOverloaded(context);
+        }
+        if (message.includes('api key is missing')) {
+            return t.errorMissingApiKey('Google');
+        }
+        return t.errorGeneric(context, error.message);
+    }
+    return t.errorUnknown(context);
+}
+
+async function executeWithKeyRotation<T>(
+    apiCallFn: (apiKey: string) => Promise<T>,
+    language: Language
 ): Promise<T> {
-    if (apiKeys.length === 0) {
-        throw new Error(translations.en.apiKeyMissingError);
+    const totalKeys = apiKeyManager.getKeyCount();
+    if (totalKeys === 0) {
+        throw new Error('API key is missing.');
     }
 
-    const initialKeyIndex = currentKeyIndex;
-    let attempts = 0;
+    const startIndex = apiKeyManager.getCurrentIndex();
+    let lastError: unknown;
 
-    while(attempts < apiKeys.length) {
+    for (let i = 0; i < totalKeys; i++) {
+        const currentKey = apiKeyManager.getCurrentKey();
+        
+        if (!currentKey) {
+            apiKeyManager.moveToNextKey();
+            continue;
+        }
+
         try {
-            return await apiCall();
+            return await apiCallFn(currentKey);
         } catch (error) {
+            lastError = error;
             const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
-            const isQuotaError = errorMessage.includes('quota') || errorMessage.includes('api key not valid');
 
-            if (isQuotaError) {
-                attempts++;
-                const rotated = rotateKey();
-                
-                if (!rotated || currentKeyIndex === initialKeyIndex) {
-                    throw new Error(translations.en.allApiKeysFailedError);
+            if (errorMessage.includes('quota') || errorMessage.includes('resource_exhausted')) {
+                console.warn(`API Key ending in ...${currentKey.slice(-4)} hit quota. Switching to the next key.`);
+                apiKeyManager.moveToNextKey();
+                if (apiKeyManager.getCurrentIndex() === startIndex) {
+                    console.error("Cycled through all keys; all are exhausted.");
+                    break; 
                 }
-                console.warn(`Key failed in ${context}. Retrying with next key (index: ${currentKeyIndex}).`);
             } else {
-                throw error; // Not a quota error, rethrow it for the outer handler
+                throw error;
             }
         }
     }
-    throw new Error(translations.en.allApiKeysFailedError);
+    
+    throw new Error("All API keys have hit their quota.");
 }
 
+const getAiClient = (apiKey: string) => new GoogleGenAI({ apiKey });
 
-function getErrorMessage(error: unknown, context: string): string {
-    console.error(`Error in ${context}:`, error);
-    if (error instanceof Error) {
-        const message = error.message;
-        if (message === translations.en.apiKeyMissingError || message === translations.en.allApiKeysFailedError) {
-            return message;
-        }
-        if (message.toLowerCase().includes('overloaded') || message.toLowerCase().includes('503') || message.toLowerCase().includes('unavailable')) {
-            return `The model is currently busy or unavailable. The request was retried but failed. Please try again in a few moments. (Context: ${context})`;
-        }
-        return `Error in ${context}: ${message}`;
+export const generateCharacterPromptFromImage = async (
+    imageBase64: string,
+    language: Language,
+): Promise<string> => {
+    const systemInstruction = translations[language].systemInstruction_generateCharacterPrompt;
+    const userPromptText = "Please describe the character in this image in detail for an animation project.";
+
+    const match = imageBase64.match(/^data:(image\/.+);base64,(.+)$/);
+    if (!match) throw new Error("Invalid image format");
+    const mimeType = match[1];
+    const data = match[2];
+
+    const apiCall = (apiKey: string) => {
+        const fn = async () => {
+            const ai = getAiClient(apiKey);
+            const response = await ai.models.generateContent({
+                model: INTERNAL_MODEL,
+                config: { systemInstruction },
+                contents: {
+                    parts: [
+                        { inlineData: { mimeType, data } },
+                        { text: userPromptText }
+                    ]
+                }
+            });
+            return response.text || "";
+        };
+        return withRetry(fn, 3, 1000, 'generateCharacterPromptFromImage');
+    };
+
+    try {
+        return await executeWithKeyRotation(apiCall, language);
+    } catch (error) {
+        throw new Error(getErrorMessage(error, 'generateCharacterPromptFromImage', language));
     }
-    return `An unknown error occurred in ${context}.`;
-}
-
-const scenePromptSchema = {
-  type: Type.OBJECT,
-  properties: {
-    description: { type: Type.STRING },
-    style: { type: Type.STRING },
-    camera: { type: Type.STRING },
-    lighting: { type: Type.STRING },
-    environment: { type: Type.STRING },
-    elements: { type: Type.ARRAY, items: { type: Type.STRING } },
-    motion: { type: Type.STRING },
-    dialogue: { type: Type.STRING },
-    audio: { type: Type.STRING },
-    ending: { type: Type.STRING },
-    text: { type: Type.STRING },
-    keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-    aspect_ratio: { type: Type.STRING },
-    duration_seconds: { type: Type.INTEGER },
-    fps: { type: Type.INTEGER },
-    quality: { type: Type.STRING },
-    negative_prompts: { type: Type.ARRAY, items: { type: Type.STRING } },
-  },
-  required: [
-    "description", "style", "camera", "lighting", "environment", "elements",
-    "motion", "dialogue", "audio", "ending", "text", "keywords", "aspect_ratio",
-    "duration_seconds", "fps", "quality", "negative_prompts"
-  ],
 };
 
-const sceneSchema = {
-  type: Type.OBJECT,
-  properties: {
-    scene_id: { type: Type.INTEGER },
-    time: { type: Type.STRING },
-    prompt: scenePromptSchema,
-  },
-  required: ["scene_id", "time", "prompt"],
-};
+export const generateCharacterPromptVariations = async (
+    characterName: string,
+    animationStyle: string,
+    storyStyle: string,
+    language: Language,
+): Promise<CharacterVariation[]> => {
+    const systemInstruction = translations[language].systemInstruction_generateCharacterVariations(characterName, animationStyle, storyStyle);
 
-const fullResponseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        scenes: {
-            type: Type.ARRAY,
-            items: sceneSchema,
-        },
-    },
-    required: ["scenes"],
+    const apiCall = (apiKey: string) => {
+        const fn = async () => {
+            const ai = getAiClient(apiKey);
+            const response = await ai.models.generateContent({
+                model: INTERNAL_MODEL,
+                config: {
+                    systemInstruction,
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            variations: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        title: { type: Type.STRING },
+                                        description: { type: Type.STRING }
+                                    },
+                                    required: ["title", "description"]
+                                }
+                            }
+                        },
+                        required: ["variations"]
+                    }
+                },
+                contents: { text: "Generate variations." }
+            });
+            
+            const parsed = JSON.parse(response.text || "{}");
+            if (parsed.variations && Array.isArray(parsed.variations)) {
+                return parsed.variations;
+            }
+            throw new Error("Invalid JSON structure for character variations.");
+        };
+        return withRetry(fn, 3, 1000, 'generateCharacterPromptVariations');
+    };
+
+    try {
+        return await executeWithKeyRotation(apiCall, language);
+    } catch (error) {
+        throw new Error(getErrorMessage(error, 'generateCharacterPromptVariations', language));
+    }
 };
 
 export const generateStoryIdea = async (
-  style: string,
+  animationStyle: string,
+  storyStyle: string,
   language: Language,
+  characterDescriptions: string,
 ): Promise<string> => {
-  const model = 'gemini-2.5-flash';
-  
-  const systemInstruction = translations[language].systemInstruction_generateStoryIdea(style);
+    const systemInstruction = translations[language].systemInstruction_generateStoryIdea(animationStyle, storyStyle, characterDescriptions);
+    const userPrompt = "Please generate an animation story concept for the character(s) provided in the system instruction.";
 
-  const apiCall = async () => {
-    const ai = getClient();
-    const response = await ai.models.generateContent({
-      model,
-      contents: "Please generate a travel video concept.",
-      config: {
-        systemInstruction,
-        temperature: 0.9,
-      },
-    });
-    return response.text.trim();
-  };
+    const apiCall = (apiKey: string) => {
+        const fn = async () => {
+            const ai = getAiClient(apiKey);
+            const response = await ai.models.generateContent({
+                model: INTERNAL_MODEL,
+                config: { systemInstruction },
+                contents: { text: userPrompt }
+            });
+            return response.text || "";
+        };
+        return withRetry(fn, 3, 1000, 'generateStoryIdea');
+    };
 
   try {
-     const performApiCall = () => withRetry(apiCall, 3, 1000, 'generateStoryIdea (server retry)');
-     return await withKeyRotation(performApiCall, 'generateStoryIdea');
+     return await executeWithKeyRotation(apiCall, language);
   } catch (error) {
-    throw new Error(getErrorMessage(error, 'generateStoryIdea'));
+    throw new Error(getErrorMessage(error, 'generateStoryIdea', language));
   }
 };
-
 
 export const generateScript = async (
   storyIdea: string,
   config: VideoConfig,
-  language: Language
+  language: Language,
+  characterDescriptions: string,
 ): Promise<string> => {
-  const model = 'gemini-2.5-pro';
-  const systemInstruction = translations[language].systemInstruction_generateScript(config);
+    const systemInstruction = translations[language].systemInstruction_generateScript(config, characterDescriptions);
 
-  const userPrompt = `
-    **Travel Idea / Itinerary:**
-    ${storyIdea}
+    const userPrompt = `
+        **Animation Story Idea:**
+        ${storyIdea}
 
-    **Video Style:** ${config.style}
-  `;
+        **Animation Style:** ${config.style}
+    `;
 
-  const apiCall = async () => {
-    const ai = getClient();
-    const response = await ai.models.generateContent({
-      model,
-      contents: userPrompt,
-      config: {
-        systemInstruction,
-        temperature: 0.9,
-        topP: 0.95,
-      },
-    });
-    
-    return response.text.trim();
-  };
+    const apiCall = (apiKey: string) => {
+        const fn = async () => {
+            const ai = getAiClient(apiKey);
+            const response = await ai.models.generateContent({
+                model: INTERNAL_MODEL,
+                config: { systemInstruction },
+                contents: { text: userPrompt }
+            });
+            return response.text || "";
+        };
+        return withRetry(fn, 3, 1000, 'generateScript');
+    };
 
   try {
-    const performApiCall = () => withRetry(apiCall, 3, 1000, 'generateScript (server retry)');
-    return await withKeyRotation(performApiCall, 'generateScript');
+    return await executeWithKeyRotation(apiCall, language);
   } catch (error) {
-    throw new Error(getErrorMessage(error, 'generateScript'));
+    throw new Error(getErrorMessage(error, 'generateScript', language));
   }
 };
-
 
 export const generateScenePrompts = async (
   generatedScript: string,
   config: VideoConfig,
   language: Language,
-  existingScenes: Scene[] = []
+  characterDescriptions: string,
+  existingScenesCount: number,
+  scenesPerBatch: number,
+  lastScene: Scene | null,
 ): Promise<Scene[]> => {
-  const model = 'gemini-2.5-flash';
-  
-  const isContinuation = existingScenes.length > 0;
-  const systemInstruction = translations[language].systemInstruction_generateScenes(config, isContinuation);
+    const startSceneId = existingScenesCount + 1;
+    const systemInstruction = translations[language].systemInstruction_generateScenes(config, characterDescriptions, startSceneId, existingScenesCount, scenesPerBatch, lastScene);
+    
+    const userPrompt = `
+        **Full Animation Script to be Visualized:**
+        ${generatedScript}
 
-  const lastSceneNumber = isContinuation ? Math.max(...existingScenes.map(s => s.scene_id)) : 0;
-  
-  const continuationPromptPart = isContinuation
-    ? `
-    You have already generated ${lastSceneNumber} scenes. Please continue generating the storyboard starting from scene number ${lastSceneNumber + 1}.
-
-    **Previously Generated Scenes (for context only, do not repeat them):**
-    ${JSON.stringify(existingScenes.slice(-3))} 
-    `
-    : 'Please generate the video scene prompts based on the following details.';
-
-  const userPrompt = `
-    ${continuationPromptPart}
-
-    **Full Shot List to be Visualized:**
-    ${generatedScript}
-
-    **Video Configuration:**
-    - Total Duration: ${config.duration} seconds
-    - Format: ${config.format}
+        **Animation Configuration:**
+        - Total Duration: ${config.duration} seconds
+        - Format: ${config.format}
+        - Scenes to generate in this batch: ${scenesPerBatch}
     `;
 
-  const apiCall = async () => {
-    const ai = getClient();
-    const response = await ai.models.generateContent({
-      model,
-      contents: userPrompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: fullResponseSchema,
-        temperature: 0.8,
-        topP: 0.9,
-      },
-    });
+    const apiCall = (apiKey: string) => {
+        const fn = async () => {
+            const ai = getAiClient(apiKey);
+            const response = await ai.models.generateContent({
+                model: INTERNAL_MODEL,
+                config: {
+                    systemInstruction,
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            scenes: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        scene_id: { type: Type.INTEGER },
+                                        time: { type: Type.STRING },
+                                        prompt: {
+                                            type: Type.OBJECT,
+                                            properties: {
+                                                scene_description: { type: Type.STRING },
+                                                character_description: { type: Type.STRING },
+                                                background_description: { type: Type.STRING },
+                                                camera_shot: { type: Type.STRING },
+                                                lighting: { type: Type.STRING },
+                                                color_palette: { type: Type.STRING },
+                                                style: { type: Type.STRING },
+                                                composition_notes: { type: Type.STRING },
+                                                sound_effects: { type: Type.STRING },
+                                                dialogue: { type: Type.STRING },
+                                                keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                                negative_prompts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                                aspect_ratio: { type: Type.STRING },
+                                                duration_seconds: { type: Type.NUMBER },
+                                            },
+                                            required: ["scene_description", "character_description", "background_description", "style"]
+                                        }
+                                    },
+                                    required: ["scene_id", "time", "prompt"]
+                                }
+                            }
+                        },
+                        required: ["scenes"]
+                    }
+                },
+                contents: { text: userPrompt }
+            });
 
-    const rawText = response.text.trim();
-    
-    const jsonRegex = /```json\s*([\s\S]*?)\s*```|({[\s\S]*})/;
-    const match = rawText.match(jsonRegex);
-    
-    if (!match) {
-        throw new Error("Could not find a valid JSON object in the API response.");
-    }
-    
-    const extractedJson = match[1] || match[2];
-    
-    let parsedJson;
+            const parsedJson = JSON.parse(response.text || "{}");
+
+            if (parsedJson.scenes && Array.isArray(parsedJson.scenes)) {
+                return parsedJson.scenes as Scene[];
+            } else {
+                console.warn("Received unexpected JSON structure. 'scenes' array not found.", parsedJson);
+                return [];
+            }
+        };
+        return withRetry(fn, 3, 1500, 'generateScenePrompts');
+    };
+
     try {
-        parsedJson = JSON.parse(extractedJson);
-    } catch (e) {
-        console.error("Failed to parse extracted JSON:", e, "Extracted:", extractedJson);
-        throw new Error("Invalid JSON format received from API after cleanup.");
+        return await executeWithKeyRotation(apiCall, language);
+    } catch (error) {
+        throw new Error(getErrorMessage(error, 'generateScenePrompts', language));
     }
-
-    if (parsedJson.scenes && Array.isArray(parsedJson.scenes)) {
-        return parsedJson.scenes as Scene[];
-    } else {
-        console.warn("Received unexpected JSON structure. 'scenes' array not found.", parsedJson);
-        return [];
-    }
-  };
-
-  try {
-    const performApiCall = () => withRetry(apiCall, 3, 1500, 'generateScenePrompts (server retry)');
-    return await withKeyRotation(performApiCall, 'generateScenePrompts');
-  } catch (error) {
-    throw new Error(getErrorMessage(error, 'generateScenePrompts'));
-  }
 };
   
-  export const generateSceneImage = async (scenePrompt: ScenePrompt, referenceImageBase64: string): Promise<string> => {
+export const generateSceneImage = async (scenePrompt: ScenePrompt, referenceImageBase64: string, language: Language): Promise<string> => {
       const model = 'gemini-2.5-flash-image';
       
       const match = referenceImageBase64.match(/^data:(image\/.+);base64,(.+)$/);
@@ -327,32 +380,34 @@ export const generateScenePrompts = async (
           },
       };
       const textPart = {
-          text: `Using the provided reference image for location and style consistency, create a cinematic image based on the following detailed JSON prompt: ${JSON.stringify(scenePrompt, null, 2)}`
+          text: `Using the provided reference image for character and style consistency, create a single animation frame based on the following detailed JSON prompt: ${JSON.stringify(scenePrompt, null, 2)}`
       };
   
-      const apiCall = async () => {
-          const ai = getClient();
-          const response: GenerateContentResponse = await ai.models.generateContent({
-              model,
-              contents: { parts: [imagePart, textPart] },
-              config: {
-                  responseModalities: [Modality.IMAGE],
-              },
-          });
-  
-          for (const part of response.candidates[0].content.parts) {
-              if (part.inlineData) {
-                  const base64ImageBytes: string = part.inlineData.data;
-                  return `data:image/png;base64,${base64ImageBytes}`;
+      const apiCall = (apiKey: string) => {
+          const fn = async () => {
+              const ai = getAiClient(apiKey);
+              const response: GenerateContentResponse = await ai.models.generateContent({
+                  model,
+                  contents: { parts: [imagePart, textPart] },
+                  config: {
+                      responseModalities: [Modality.IMAGE],
+                  },
+              });
+      
+              for (const part of response.candidates[0].content.parts) {
+                  if (part.inlineData) {
+                      const base64ImageBytes: string = part.inlineData.data;
+                      return `data:image/png;base64,${base64ImageBytes}`;
+                  }
               }
-          }
-          throw new Error("No image data found in the response from the model.");
+              throw new Error("No image data found in the response from the model.");
+          };
+          return withRetry(fn, 3, 1500, 'generateSceneImage');
       };
       
       try {
-          const performApiCall = () => withRetry(apiCall, 3, 1500, 'generateSceneImage (server retry)');
-          return await withKeyRotation(performApiCall, 'generateSceneImage');
+        return await executeWithKeyRotation(apiCall, language);
       } catch (error) {
-        throw new Error(getErrorMessage(error, 'generateSceneImage'));
+        throw new Error(getErrorMessage(error, 'generateSceneImage', language));
       }
-  };
+};

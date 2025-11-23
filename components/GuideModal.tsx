@@ -12,6 +12,29 @@ const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, t }) => {
     return null;
   }
 
+  const formatDescription = (description: string) => {
+    const parts = description.split('\n');
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.startsWith('[Character Name:')) {
+            return (
+              <pre key={index} className="bg-[#0D0D0F] p-2 rounded-md text-xs text-cyan-300 my-2 whitespace-pre-wrap">
+                {part}
+              </pre>
+            );
+          }
+          return (
+            <React.Fragment key={index}>
+              {part}
+              {index < parts.length - 1 && <br />}
+            </React.Fragment>
+          );
+        })}
+      </>
+    );
+  };
+
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4" 
@@ -41,7 +64,7 @@ const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, t }) => {
             {t.guideSteps.map((step, index) => (
               <li key={index} className="pl-2">
                 <strong className="font-semibold text-[#5BEAFF]">{step.title}:</strong>
-                <span className="ml-2 text-gray-300">{step.description}</span>
+                <span className="ml-2 text-gray-300">{formatDescription(step.description)}</span>
               </li>
             ))}
           </ol>

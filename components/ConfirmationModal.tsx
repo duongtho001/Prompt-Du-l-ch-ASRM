@@ -9,6 +9,7 @@ interface ConfirmationModalProps {
   confirmText: string;
   cancelText: string;
   icon?: React.ReactNode;
+  confirmButtonClass?: string;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -20,6 +21,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   confirmText,
   cancelText,
   icon,
+  confirmButtonClass = "bg-red-600 hover:bg-red-700 focus:ring-red-500",
 }) => {
   if (!isOpen) {
     return null;
@@ -40,12 +42,12 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         <div className="p-6 text-center">
           {icon && <div className="flex justify-center mb-4">{icon}</div>}
           <h2 id="confirmation-modal-title" className="text-xl font-bold text-gray-100">{title}</h2>
-          <p className="mt-2 text-sm text-gray-400">{message}</p>
+          <p className="mt-2 text-sm text-gray-400 whitespace-pre-wrap">{message}</p>
         </div>
         <div className="bg-gray-800/50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-3">
           <button
             type="button"
-            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm transition-colors"
+            className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-bold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:w-auto sm:text-sm transition-colors ${confirmButtonClass}`}
             onClick={onConfirm}
           >
             {confirmText}

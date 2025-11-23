@@ -12,9 +12,8 @@ const PromptHelper: React.FC<PromptHelperProps> = ({ onInsertTag, t }) => {
   return (
     <div className="mt-2 p-3 bg-[#0D0D0F] border border-gray-600 rounded-lg text-xs space-y-3">
       <h4 className="font-semibold text-gray-400">{t.promptHelperTitle}</h4>
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-3">
-        {Object.keys(tagGroups).map(key => {
-          const { group, tags } = tagGroups[key];
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3">
+        {Object.values(tagGroups).map(({ group, tags }) => {
           return (
             <div key={group} className="flex flex-col">
               <p className="text-gray-400 font-semibold mb-1 truncate text-sm" title={group}>{group}</p>
@@ -23,7 +22,7 @@ const PromptHelper: React.FC<PromptHelperProps> = ({ onInsertTag, t }) => {
                   <button
                     key={tag}
                     title={desc}
-                    onClick={() => onInsertTag(`${tag}, `)}
+                    onClick={() => onInsertTag(`${tag}`)}
                     className="text-left bg-gray-800/60 text-gray-300 px-2 py-1 rounded hover:bg-cyan-800/70 hover:text-cyan-200 transition-colors"
                   >
                     {tag}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { TranslationKeys } from '../translations';
-import KeyIcon from './icons/KeyIcon';
+import Cog6ToothIcon from './icons/Cog6ToothIcon';
+import SaveIcon from './icons/SaveIcon';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -11,21 +12,22 @@ interface ApiKeyModalProps {
 }
 
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, currentKeys, t }) => {
-  const [keysInput, setKeysInput] = useState('');
+  const [keysText, setKeysText] = useState('');
 
   useEffect(() => {
+    // Update textarea only when the modal is opened or currentKeys prop changes
     if (isOpen) {
-      setKeysInput(currentKeys.join('\n'));
+      setKeysText(currentKeys.join('\n'));
     }
-  }, [isOpen, currentKeys]);
+  }, [currentKeys, isOpen]);
 
   if (!isOpen) {
     return null;
   }
 
   const handleSave = () => {
-    const keys = keysInput.split('\n').map(k => k.trim()).filter(Boolean);
-    onSave(keys);
+    const keysArray = keysText.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+    onSave(keysArray);
     onClose();
   };
 
@@ -38,40 +40,48 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, curr
       aria-labelledby="api-key-modal-title"
     >
       <div
-        className="bg-[#1E1E22] rounded-lg shadow-2xl w-full max-w-lg border-2 border-gray-700"
+        className="bg-[#1E1E22] rounded-lg shadow-2xl w-full max-w-lg border-2 border-gray-700 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6">
-          <div className="flex items-center gap-x-4 mb-4">
-            <KeyIcon className="w-8 h-8 text-[#5BEAFF]" />
-            <div>
-              <h2 id="api-key-modal-title" className="text-xl font-bold text-gray-100">{t.apiKeyModalTitle}</h2>
-              <p className="text-sm text-gray-400">{t.apiKeyModalDescription}</p>
-            </div>
-          </div>
-          <textarea
-            value={keysInput}
-            onChange={(e) => setKeysInput(e.target.value)}
-            rows={8}
-            className="w-full bg-[#0D0D0F] text-gray-300 p-3 rounded-md border border-gray-700 focus:ring-2 focus:ring-[#5BEAFF] focus:border-[#5BEAFF] transition font-mono"
-            placeholder={t.apiKeyModalPlaceholder}
-          />
-           <p className="text-xs text-gray-500 mt-2">{t.apiKeyModalNotice}</p>
-        </div>
-        <div className="bg-gray-800/50 px-6 py-4 flex justify-end gap-3">
+        <div className="px-6 py-4 flex justify-between items-center border-b border-gray-700">
+          <h2 id="api-key-modal-title" className="text-xl font-bold text-gray-100 flex items-center gap-x-3">
+            <Cog6ToothIcon className="w-6 h-6 text-gray-400" />
+            {t.apiKeyModalTitle}
+          </h2>
           <button
-            type="button"
-            className="rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-[#0D0D0F] text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:w-auto sm:text-sm transition-colors"
             onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
+            aria-label={t.closeButton}
           >
-            {t.cancelButton}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
+        </div>
+        <div className="p-8 space-y-4">
+          <div>
+            <label htmlFor="google-api-keys" className="block text-sm font-medium text-gray-300 mb-2">
+              {t.googleApiKeysLabel}
+            </label>
+            <textarea
+              id="google-api-keys"
+              rows={8}
+              className="w-full bg-[#0D0D0F] text-gray-300 p-3 rounded-md border border-gray-600 focus:ring-2 focus:ring-[#5BEAFF] focus:border-[#5BEAFF] transition font-mono text-sm"
+              placeholder={t.apiKeyInputPlaceholder}
+              value={keysText}
+              onChange={(e) => setKeysText(e.target.value)}
+            />
+             <p className="text-xs text-gray-500 mt-2">{t.apiKeyInstructions}</p>
+          </div>
+        </div>
+        <div className="bg-gray-800/50 px-6 py-4 flex justify-end gap-3 border-t border-gray-700">
           <button
             type="button"
-            className="rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#5BEAFF] text-base font-bold text-black hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:w-auto sm:text-sm transition-colors"
+            className="flex items-center gap-x-2 rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#5BEAFF] text-base font-bold text-black hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:w-auto sm:text-sm transition-colors"
             onClick={handleSave}
           >
-            {t.apiKeyModalSaveButton}
+            <SaveIcon className="w-5 h-5" />
+            {t.saveKeysButton}
           </button>
         </div>
       </div>
